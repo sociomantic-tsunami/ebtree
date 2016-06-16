@@ -1,21 +1,18 @@
 /*
  * Elastic Binary Trees - generic macros and structures.
- * Version 6.0.6
- * (C) 2002-2011 - Willy Tarreau <w@1wt.eu>
+ * Version 6.0.1
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation, version 2.1
- * exclusively.
+ * Copyright (C) 2000-2015 Willy Tarreau <w@1wt.eu>
+ * Distributed under MIT/X11 license (See accompanying file LICENSE)
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
+ * Short history :
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ * 2007/09/28: full support for the duplicates tree => v3
+ * 2007/07/08: merge back cleanups from kernel version.
+ * 2007/07/01: merge into Linux Kernel (try 1).
+ * 2007/05/27: version 2: compact everything into one single struct
+ * 2007/05/18: adapted the structure to support embedded nodes
+ * 2007/05/13: adapted to mempools v2.
  */
 
 
@@ -243,308 +240,34 @@
 
  */
 
-#ifndef _EBTREE_H
-#define _EBTREE_H
-
+#include "ebtree.h"
 #include <stdlib.h>
 #include "compiler.h"
-
-static inline int flsnz8_generic(unsigned int x)
-{
-	int ret = 0;
-	if (x >> 4) { x >>= 4; ret += 4; }
-	return ret + ((0xFFFFAA50U >> (x << 1)) & 3) + 1;
-}
-
-/* Note: we never need to run fls on null keys, so we can optimize the fls
- * function by removing a conditional jump.
- */
-#if defined(__i386__) || defined(__x86_64__)
-/* this code is similar on 32 and 64 bit */
-static inline int flsnz(int x)
-{
-	int r;
-	__asm__("bsrl %1,%0\n"
-	        : "=r" (r) : "rm" (x));
-	return r+1;
-}
-
-static inline int flsnz8(unsigned char x)
-{
-	int r;
-	__asm__("movzbl %%al, %%eax\n"
-		"bsrl %%eax,%0\n"
-	        : "=r" (r) : "a" (x));
-	return r+1;
-}
-
-#else
-// returns 1 to 32 for 1<<0 to 1<<31. Undefined for 0.
-#define flsnz(___a) ({ \
-	register int ___x, ___bits = 0; \
-	___x = (___a); \
-	if (___x & 0xffff0000) { ___x &= 0xffff0000; ___bits += 16;} \
-	if (___x & 0xff00ff00) { ___x &= 0xff00ff00; ___bits +=  8;} \
-	if (___x & 0xf0f0f0f0) { ___x &= 0xf0f0f0f0; ___bits +=  4;} \
-	if (___x & 0xcccccccc) { ___x &= 0xcccccccc; ___bits +=  2;} \
-	if (___x & 0xaaaaaaaa) { ___x &= 0xaaaaaaaa; ___bits +=  1;} \
-	___bits + 1; \
-	})
-
-static inline int flsnz8(unsigned int x)
-{
-	return flsnz8_generic(x);
-}
-
-
-#endif
-
-static inline int fls64(unsigned long long x)
-{
-	unsigned int h;
-	unsigned int bits = 32;
-
-	h = x >> 32;
-	if (!h) {
-		h = x;
-		bits = 0;
-	}
-	return flsnz(h) + bits;
-}
-
-#define fls_auto(x) ((sizeof(x) > 4) ? fls64(x) : flsnz(x))
-
-/* Linux-like "container_of". It returns a pointer to the structure of type
- * <type> which has its member <name> stored at address <ptr>.
- */
-#ifndef container_of
-#define container_of(ptr, type, name) ((type *)(((char *)(ptr)) - ((long)&((type *)0)->name)))
-#endif
-
-/* returns a pointer to the structure of type <type> which has its member <name>
- * stored at address <ptr>, unless <ptr> is 0, in which case 0 is returned.
- */
-#ifndef container_of_safe
-#define container_of_safe(ptr, type, name) \
-	({ void *__p = (ptr); \
-		__p ? (type *)(__p - ((long)&((type *)0)->name)) : (type *)0; \
-	})
-#endif
-
-/* Number of bits per node, and number of leaves per node */
-#define EB_NODE_BITS          1
-#define EB_NODE_BRANCHES      (1 << EB_NODE_BITS)
-#define EB_NODE_BRANCH_MASK   (EB_NODE_BRANCHES - 1)
-
-/* Be careful not to tweak those values. The walking code is optimized for NULL
- * detection on the assumption that the following values are intact.
- */
-#define EB_LEFT     0
-#define EB_RGHT     1
-#define EB_LEAF     0
-#define EB_NODE     1
-
-/* Tags to set in root->b[EB_RGHT] :
- * - EB_NORMAL is a normal tree which stores duplicate keys.
- * - EB_UNIQUE is a tree which stores unique keys.
- */
-#define EB_NORMAL   0
-#define EB_UNIQUE   1
-
-/* This is the same as an eb_node pointer, except that the lower bit embeds
- * a tag. See eb_dotag()/eb_untag()/eb_gettag(). This tag has two meanings :
- *  - 0=left, 1=right to designate the parent's branch for leaf_p/node_p
- *  - 0=link, 1=leaf  to designate the branch's type for branch[]
- */
-typedef void eb_troot_t;
-
-/* The eb_root connects the node which contains it, to two nodes below it, one
- * of which may be the same node. At the top of the tree, we use an eb_root
- * too, which always has its right branch NULL (+/1 low-order bits).
- */
-struct eb_root {
-	eb_troot_t    *b[EB_NODE_BRANCHES]; /* left and right branches */
-};
-
-/* The eb_node contains the two parts, one for the leaf, which always exists,
- * and one for the node, which remains unused in the very first node inserted
- * into the tree. This structure is 20 bytes per node on 32-bit machines. Do
- * not change the order, benchmarks have shown that it's optimal this way.
- */
-struct eb_node {
-	struct eb_root branches; /* branches, must be at the beginning */
-	eb_troot_t    *node_p;  /* link node's parent */
-	eb_troot_t    *leaf_p;  /* leaf node's parent */
-	short int      bit;     /* link's bit position. */
-	short unsigned int pfx; /* data prefix length, always related to leaf */
-};
-
-/* Return the structure of type <type> whose member <member> points to <ptr> */
-#define eb_entry(ptr, type, member) container_of(ptr, type, member)
-
-/* The root of a tree is an eb_root initialized with both pointers NULL.
- * During its life, only the left pointer will change. The right one will
- * always remain NULL, which is the way we detect it.
- */
-#define EB_ROOT						\
-	(struct eb_root) {				\
-		.b = {[0] = NULL, [1] = NULL },		\
-	}
-
-#define EB_ROOT_UNIQUE					\
-	(struct eb_root) {				\
-		.b = {[0] = NULL, [1] = (void *)1 },	\
-	}
-
-#define EB_TREE_HEAD(name)				\
-	struct eb_root name = EB_ROOT
-
-
-/***************************************\
- * Private functions. Not for end-user *
-\***************************************/
-
-/* Converts a root pointer to its equivalent eb_troot_t pointer,
- * ready to be stored in ->branch[], leaf_p or node_p. NULL is not
- * conserved. To be used with EB_LEAF, EB_NODE, EB_LEFT or EB_RGHT in <tag>.
- */
-static inline eb_troot_t *eb_dotag(const struct eb_root *root, const int tag)
-{
-	return (eb_troot_t *)((char *)root + tag);
-}
-
-/* Converts an eb_troot_t pointer pointer to its equivalent eb_root pointer,
- * for use with pointers from ->branch[], leaf_p or node_p. NULL is conserved
- * as long as the tree is not corrupted. To be used with EB_LEAF, EB_NODE,
- * EB_LEFT or EB_RGHT in <tag>.
- */
-static inline struct eb_root *eb_untag(const eb_troot_t *troot, const int tag)
-{
-	return (struct eb_root *)((char *)troot - tag);
-}
-
-/* returns the tag associated with an eb_troot_t pointer */
-static inline int eb_gettag(eb_troot_t *troot)
-{
-	return (unsigned long)troot & 1;
-}
-
-/* Converts a root pointer to its equivalent eb_troot_t pointer and clears the
- * tag, no matter what its value was.
- */
-static inline struct eb_root *eb_clrtag(const eb_troot_t *troot)
-{
-	return (struct eb_root *)((unsigned long)troot & ~1UL);
-}
-
-/* Returns a pointer to the eb_node holding <root> */
-static inline struct eb_node *eb_root_to_node(struct eb_root *root)
-{
-	return container_of(root, struct eb_node, branches);
-}
-
-/* Walks down starting at root pointer <start>, and always walking on side
- * <side>. It either returns the node hosting the first leaf on that side,
- * or NULL if no leaf is found. <start> may either be NULL or a branch pointer.
- * The pointer to the leaf (or NULL) is returned.
- */
-static inline struct eb_node *eb_walk_down(eb_troot_t *start, unsigned int side)
-{
-	/* A NULL pointer on an empty tree root will be returned as-is */
-	while (eb_gettag(start) == EB_NODE)
-		start = (eb_untag(start, EB_NODE))->b[side];
-	/* NULL is left untouched (root==eb_node, EB_LEAF==0) */
-	return eb_root_to_node(eb_untag(start, EB_LEAF));
-}
-
-/* This function is used to build a tree of duplicates by adding a new node to
- * a subtree of at least 2 entries. It will probably never be needed inlined,
- * and it is not for end-user.
- */
-static forceinline struct eb_node *
-__eb_insert_dup(struct eb_node *sub, struct eb_node *new)
-{
-	struct eb_node *head = sub;
-	
-	eb_troot_t *new_left = eb_dotag(&new->branches, EB_LEFT);
-	eb_troot_t *new_rght = eb_dotag(&new->branches, EB_RGHT);
-	eb_troot_t *new_leaf = eb_dotag(&new->branches, EB_LEAF);
-
-	/* first, identify the deepest hole on the right branch */
-	while (eb_gettag(head->branches.b[EB_RGHT]) != EB_LEAF) {
-		struct eb_node *last = head;
-		head = container_of(eb_untag(head->branches.b[EB_RGHT], EB_NODE),
-				    struct eb_node, branches);
-		if (head->bit > last->bit + 1)
-			sub = head;     /* there's a hole here */
-	}
-
-	/* Here we have a leaf attached to (head)->b[EB_RGHT] */
-	if (head->bit < -1) {
-		/* A hole exists just before the leaf, we insert there */
-		new->bit = -1;
-		sub = container_of(eb_untag(head->branches.b[EB_RGHT], EB_LEAF),
-				   struct eb_node, branches);
-		head->branches.b[EB_RGHT] = eb_dotag(&new->branches, EB_NODE);
-
-		new->node_p = sub->leaf_p;
-		new->leaf_p = new_rght;
-		sub->leaf_p = new_left;
-		new->branches.b[EB_LEFT] = eb_dotag(&sub->branches, EB_LEAF);
-		new->branches.b[EB_RGHT] = new_leaf;
-		return new;
-	} else {
-		int side;
-		/* No hole was found before a leaf. We have to insert above
-		 * <sub>. Note that we cannot be certain that <sub> is attached
-		 * to the right of its parent, as this is only true if <sub>
-		 * is inside the dup tree, not at the head.
-		 */
-		new->bit = sub->bit - 1; /* install at the lowest level */
-		side = eb_gettag(sub->node_p);
-		head = container_of(eb_untag(sub->node_p, side), struct eb_node, branches);
-		head->branches.b[side] = eb_dotag(&new->branches, EB_NODE);
-					
-		new->node_p = sub->node_p;
-		new->leaf_p = new_rght;
-		sub->node_p = new_left;
-		new->branches.b[EB_LEFT] = eb_dotag(&sub->branches, EB_NODE);
-		new->branches.b[EB_RGHT] = new_leaf;
-		return new;
-	}
-}
-
 
 /**************************************\
  * Public functions, for the end-user *
 \**************************************/
 
 /* Return non-zero if the tree is empty, otherwise zero */
-static inline int eb_is_empty(struct eb_root *root)
+int eb_is_empty(struct eb_root *root)
 {
 	return !root->b[EB_LEFT];
 }
 
-/* Return non-zero if the node is a duplicate, otherwise zero */
-static inline int eb_is_dup(struct eb_node *node)
-{
-	return node->bit < 0;
-}
-
 /* Return the first leaf in the tree starting at <root>, or NULL if none */
-static inline struct eb_node *eb_first(struct eb_root *root)
+struct eb_node *eb_first(struct eb_root *root)
 {
 	return eb_walk_down(root->b[0], EB_LEFT);
 }
 
 /* Return the last leaf in the tree starting at <root>, or NULL if none */
-static inline struct eb_node *eb_last(struct eb_root *root)
+struct eb_node *eb_last(struct eb_root *root)
 {
 	return eb_walk_down(root->b[0], EB_RGHT);
 }
 
 /* Return previous leaf node before an existing leaf node, or NULL if none. */
-static inline struct eb_node *eb_prev(struct eb_node *node)
+struct eb_node *eb_prev(struct eb_node *node)
 {
 	eb_troot_t *t = node->leaf_p;
 
@@ -562,7 +285,7 @@ static inline struct eb_node *eb_prev(struct eb_node *node)
 }
 
 /* Return next leaf node after an existing leaf node, or NULL if none. */
-static inline struct eb_node *eb_next(struct eb_node *node)
+struct eb_node *eb_next(struct eb_node *node)
 {
 	eb_troot_t *t = node->leaf_p;
 
@@ -577,54 +300,9 @@ static inline struct eb_node *eb_next(struct eb_node *node)
 	return eb_walk_down(t, EB_LEFT);
 }
 
-/* Return previous leaf node within a duplicate sub-tree, or NULL if none. */
-static inline struct eb_node *eb_prev_dup(struct eb_node *node)
-{
-	eb_troot_t *t = node->leaf_p;
-
-	while (eb_gettag(t) == EB_LEFT) {
-		/* Walking up from left branch. We must ensure that we never
-		 * walk beyond root.
-		 */
-		if (unlikely(eb_clrtag((eb_untag(t, EB_LEFT))->b[EB_RGHT]) == NULL))
-			return NULL;
-		/* if the current node leaves a dup tree, quit */
-		if ((eb_root_to_node(eb_untag(t, EB_LEFT)))->bit >= 0)
-			return NULL;
-		t = (eb_root_to_node(eb_untag(t, EB_LEFT)))->node_p;
-	}
-	/* Note that <t> cannot be NULL at this stage */
-	if ((eb_root_to_node(eb_untag(t, EB_RGHT)))->bit >= 0)
-		return NULL;
-	t = (eb_untag(t, EB_RGHT))->b[EB_LEFT];
-	return eb_walk_down(t, EB_RGHT);
-}
-
-/* Return next leaf node within a duplicate sub-tree, or NULL if none. */
-static inline struct eb_node *eb_next_dup(struct eb_node *node)
-{
-	eb_troot_t *t = node->leaf_p;
-
-	while (eb_gettag(t) != EB_LEFT) {
-		/* Walking up from right branch, so we cannot be below root */
-		/* if the current node leaves a dup tree, quit */
-		if ((eb_root_to_node(eb_untag(t, EB_RGHT)))->bit >= 0)
-			return NULL;
-		t = (eb_root_to_node(eb_untag(t, EB_RGHT)))->node_p;
-	}
-
-	/* Note that <t> cannot be NULL at this stage */
-	if ((eb_root_to_node(eb_untag(t, EB_LEFT)))->bit >= 0)
-		return NULL;
-	t = (eb_untag(t, EB_LEFT))->b[EB_RGHT];
-	if (eb_clrtag(t) == NULL)
-		return NULL;
-	return eb_walk_down(t, EB_LEFT);
-}
-
 /* Return previous leaf node before an existing leaf node, skipping duplicates,
  * or NULL if none. */
-static inline struct eb_node *eb_prev_unique(struct eb_node *node)
+struct eb_node *eb_prev_unique(struct eb_node *node)
 {
 	eb_troot_t *t = node->leaf_p;
 
@@ -653,7 +331,7 @@ static inline struct eb_node *eb_prev_unique(struct eb_node *node)
 /* Return next leaf node after an existing leaf node, skipping duplicates, or
  * NULL if none.
  */
-static inline struct eb_node *eb_next_unique(struct eb_node *node)
+struct eb_node *eb_next_unique(struct eb_node *node)
 {
 	eb_troot_t *t = node->leaf_p;
 
@@ -684,7 +362,7 @@ static inline struct eb_node *eb_next_unique(struct eb_node *node)
 /* Removes a leaf node from the tree if it was still in it. Marks the node
  * as unlinked.
  */
-static forceinline void __eb_delete(struct eb_node *node)
+void eb_delete(struct eb_node *node)
 {
 	__label__ delete_unlink;
 	unsigned int pside, gpside, sibtype;
@@ -781,7 +459,7 @@ static forceinline void __eb_delete(struct eb_node *node)
  * bytes. Note that parts or all of <ignore> bits may be rechecked. It is only
  * passed here as a hint to speed up the check.
  */
-static forceinline int equal_bits(const unsigned char *a,
+int equal_bits(const unsigned char *a,
 				  const unsigned char *b,
 				  int ignore, int len)
 {
@@ -810,7 +488,7 @@ static forceinline int equal_bits(const unsigned char *a,
  * they already are on some bytes, this number of equal bytes to be skipped may
  * be passed in <skip>. It returns 0 if they match, otherwise non-zero.
  */
-static forceinline int check_bits(const unsigned char *a,
+int check_bits(const unsigned char *a,
 				  const unsigned char *b,
 				  int skip,
 				  int len)
@@ -847,7 +525,7 @@ static forceinline int check_bits(const unsigned char *a,
  * permitted. Equal strings are reported as a negative number of bits, which
  * indicates the end was reached.
  */
-static forceinline int string_equal_bits(const unsigned char *a,
+int string_equal_bits(const unsigned char *a,
 					 const unsigned char *b,
 					 int ignore)
 {
@@ -880,7 +558,7 @@ static forceinline int string_equal_bits(const unsigned char *a,
 	return (beg << 3) - flsnz8(c);
 }
 
-static forceinline int cmp_bits(const unsigned char *a, const unsigned char *b, unsigned int pos)
+int cmp_bits(const unsigned char *a, const unsigned char *b, unsigned int pos)
 {
 	unsigned int ofs;
 	unsigned char bit_a, bit_b;
@@ -894,7 +572,7 @@ static forceinline int cmp_bits(const unsigned char *a, const unsigned char *b, 
 	return bit_a - bit_b; /* -1: a<b; 0: a=b; 1: a>b */
 }
 
-static forceinline int get_bit(const unsigned char *a, unsigned int pos)
+int get_bit(const unsigned char *a, unsigned int pos)
 {
 	unsigned int ofs;
 
@@ -903,15 +581,78 @@ static forceinline int get_bit(const unsigned char *a, unsigned int pos)
 	return (a[ofs] >> pos) & 1;
 }
 
-/* These functions are declared in ebtree.c */
-void eb_delete(struct eb_node *node);
-REGPRM1 struct eb_node *eb_insert_dup(struct eb_node *sub, struct eb_node *new);
-
-#endif /* _EB_TREE_H */
-
-/*
- * Local variables:
- *  c-indent-level: 8
- *  c-basic-offset: 8
- * End:
+/* Walks down starting at root pointer <start>, and always walking on side
+ * <side>. It either returns the node hosting the first leaf on that side,
+ * or NULL if no leaf is found. <start> may either be NULL or a branch pointer.
+ * The pointer to the leaf (or NULL) is returned.
  */
+struct eb_node *eb_walk_down(eb_troot_t *start, unsigned int side)
+{
+	/* A NULL pointer on an empty tree root will be returned as-is */
+	while (eb_gettag(start) == EB_NODE)
+		start = (eb_untag(start, EB_NODE))->b[side];
+	/* NULL is left untouched (root==eb_node, EB_LEAF==0) */
+	return eb_root_to_node(eb_untag(start, EB_LEAF));
+}
+
+/* This function is used to build a tree of duplicates by adding a new node to
+ * a subtree of at least 2 entries. It will probably never be needed inlined,
+ * and it is not for end-user.
+ */
+struct eb_node *eb_insert_dup(struct eb_node *sub, struct eb_node *new)
+{
+	struct eb_node *head = sub;
+
+	/* FIXME: the next three lines provoke "initialization from incompatible
+	 * pointer type" compiler warnings because eb_dotag() returns
+	 * struct eb_troot_t *. Suggest a cast.
+	 */
+
+	struct eb_troot *new_left = (struct eb_troot *)eb_dotag(&new->branches, EB_LEFT);
+	struct eb_troot *new_rght = (struct eb_troot *)eb_dotag(&new->branches, EB_RGHT);
+	struct eb_troot *new_leaf = (struct eb_troot *)eb_dotag(&new->branches, EB_LEAF);
+
+	/* first, identify the deepest hole on the right branch */
+	while (eb_gettag(head->branches.b[EB_RGHT]) != EB_LEAF) {
+		struct eb_node *last = head;
+		head = container_of(eb_untag(head->branches.b[EB_RGHT], EB_NODE),
+				    struct eb_node, branches);
+		if (head->bit > last->bit + 1)
+			sub = head;     /* there's a hole here */
+	}
+
+	/* Here we have a leaf attached to (head)->b[EB_RGHT] */
+	if (head->bit < -1) {
+		/* A hole exists just before the leaf, we insert there */
+		new->bit = -1;
+		sub = container_of(eb_untag(head->branches.b[EB_RGHT], EB_LEAF),
+				   struct eb_node, branches);
+		head->branches.b[EB_RGHT] = eb_dotag(&new->branches, EB_NODE);
+
+		new->node_p = sub->leaf_p;
+		new->leaf_p = new_rght;
+		sub->leaf_p = new_left;
+		new->branches.b[EB_LEFT] = eb_dotag(&sub->branches, EB_LEAF);
+		new->branches.b[EB_RGHT] = new_leaf;
+		return new;
+	} else {
+		int side;
+		/* No hole was found before a leaf. We have to insert above
+		 * <sub>. Note that we cannot be certain that <sub> is attached
+		 * to the right of its parent, as this is only true if <sub>
+		 * is inside the dup tree, not at the head.
+		 */
+		new->bit = sub->bit - 1; /* install at the lowest level */
+		side = eb_gettag(sub->node_p);
+		head = container_of(eb_untag(sub->node_p, side), struct eb_node, branches);
+		head->branches.b[side] = eb_dotag(&new->branches, EB_NODE);
+
+		new->node_p = sub->node_p;
+		new->leaf_p = new_rght;
+		sub->node_p = new_left;
+		new->branches.b[EB_LEFT] = eb_dotag(&sub->branches, EB_NODE);
+		new->branches.b[EB_RGHT] = new_leaf;
+		return new;
+	}
+}
+

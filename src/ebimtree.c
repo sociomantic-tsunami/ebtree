@@ -1,39 +1,20 @@
 /*
  * Elastic Binary Trees - macros for Indirect Multi-Byte data nodes.
- * Version 6.0.6
- * (C) 2002-2011 - Willy Tarreau <w@1wt.eu>
+ * Version 6.0.5
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation, version 2.1
- * exclusively.
+ * Copyright (C) 2000-2015 Willy Tarreau <w@1wt.eu>
+ * Distributed under MIT/X11 license (See accompanying file LICENSE)
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
-
-#ifndef _EBIMTREE_H
-#define _EBIMTREE_H
 
 #include <string.h>
 #include "ebtree.h"
 #include "ebpttree.h"
+#include "compiler.h"
 
 /* These functions and macros rely on Pointer nodes and use the <key> entry as
  * a pointer to an indirect key. Most operations are performed using ebpt_*.
  */
-
-/* The following functions are not inlined by default. They are declared
- * in ebimtree.c, which simply relies on their inline version.
- */
-REGPRM3 struct ebpt_node *ebim_lookup(struct eb_root *root, const void *x, unsigned int len);
-REGPRM3 struct ebpt_node *ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len);
 
 /* Find the first occurence of a key of a least <len> bytes matching <x> in the
  * tree <root>. The caller is responsible for ensuring that <len> will not exceed
@@ -42,8 +23,7 @@ REGPRM3 struct ebpt_node *ebim_insert(struct eb_root *root, struct ebpt_node *ne
  * lookup string keys by prefix if all keys in the tree are zero-terminated. If
  * no match is found, NULL is returned. Returns first node if <len> is zero.
  */
-static forceinline struct ebpt_node *
-__ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
+struct ebpt_node *ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
 {
 	struct ebpt_node *node;
 	eb_troot_t *troot;
@@ -62,7 +42,7 @@ __ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
 		if (eb_gettag(troot) == EB_LEAF) {
 			node = container_of(eb_untag(troot, EB_LEAF),
 					    struct ebpt_node, node.branches);
-			if (memcmp((unsigned char *)node->key + pos, (unsigned char *)x, len) != 0)
+			if (memcmp(node->key + pos, x, len) != 0)
 				goto ret_null;
 			else
 				goto ret_node;
@@ -76,7 +56,7 @@ __ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
 			 * value, and we walk down left, or it's a different
 			 * one and we don't have our key.
 			 */
-			if (memcmp((unsigned char *)node->key + pos, (unsigned char *)x, len) != 0)
+			if (memcmp(node->key + pos, x, len) != 0)
 				goto ret_null;
 			else
 				goto walk_left;
@@ -94,7 +74,7 @@ __ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
 			 * be fine with 2.95 to 4.2.
 			 */
 			while (1) {
-				if (*((unsigned char*)node->key + pos++) ^ *(unsigned char*)(x++))
+				if (*(unsigned char*)(node->key + pos++) ^ *(unsigned char*)(x++))
 					goto ret_null; /* more than one full byte is different */
 				if (--len == 0)
 					goto walk_left; /* return first node if all bytes matched */
@@ -110,7 +90,7 @@ __ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
 		 *   - walk down on side = (x[pos] >> node_bit) & 1
 		 */
 		side = *(unsigned char *)x >> node_bit;
-		if (((*((unsigned char*)node->key + pos) >> node_bit) ^ side) > 1)
+		if (((*(unsigned char*)(node->key + pos) >> node_bit) ^ side) > 1)
 			goto ret_null;
 		side &= 1;
 		troot = node->node.branches.b[side];
@@ -133,13 +113,12 @@ __ebim_lookup(struct eb_root *root, const void *x, unsigned int len)
  * If root->b[EB_RGHT]==1, the tree may only contain unique keys. The
  * len is specified in bytes.
  */
-static forceinline struct ebpt_node *
-__ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len)
+struct ebpt_node *ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len)
 {
 	struct ebpt_node *old;
 	unsigned int side;
 	eb_troot_t *troot;
-	eb_troot_t *root_right;
+	eb_troot_t *root_right = root;
 	int diff;
 	int bit;
 	int old_node_bit;
@@ -201,14 +180,7 @@ __ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len)
 			 * The last two cases can easily be partially merged.
 			 */
 			bit = equal_bits(new->key, old->key, bit, len);
-
-			/* Note: we can compare more bits than the current node's because as
-			 * long as they are identical, we know we descend along the correct
-			 * side. However we don't want to start to compare past the end.
-			 */
-			diff = 0;
-			if (((unsigned)bit >> 3) < len)
-				diff = cmp_bits(new->key, old->key, bit);
+			diff = cmp_bits(new->key, old->key, bit);
 
 			if (diff < 0) {
 				new->node.leaf_p = new_left;
@@ -273,14 +245,7 @@ __ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len)
 
 			new->node.node_p = old->node.node_p;
 
-			/* Note: we can compare more bits than the current node's because as
-			 * long as they are identical, we know we descend along the correct
-			 * side. However we don't want to start to compare past the end.
-			 */
-			diff = 0;
-			if (((unsigned)bit >> 3) < len)
-				diff = cmp_bits(new->key, old->key, bit);
-
+			diff = cmp_bits(new->key, old->key, bit);
 			if (diff < 0) {
 				new->node.leaf_p = new_left;
 				old->node.node_p = new_rght;
@@ -320,5 +285,3 @@ __ebim_insert(struct eb_root *root, struct ebpt_node *new, unsigned int len)
 	root->b[side] = eb_dotag(&new->node.branches, EB_NODE);
 	return new;
 }
-
-#endif /* _EBIMTREE_H */

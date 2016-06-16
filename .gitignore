@@ -1,0 +1,7 @@
+libebtree.a
+libebtree.so
+obj/
+deb/ebtree/
+deb/libebtree*so*
+deb/libebtree*.deb
+deb/*.debug

@@ -1,48 +1,19 @@
 /*
  * Elastic Binary Trees - macros and structures for operations on 64bit nodes.
- * Version 6.0.6
- * (C) 2002-2011 - Willy Tarreau <w@1wt.eu>
+ * Version 6.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation, version 2.1
- * exclusively.
+ * Copyright (C) 2000-2015 Willy Tarreau <w@1wt.eu>
+ * Distributed under MIT/X11 license (See accompanying file LICENSE)
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef _EB64TREE_H
-#define _EB64TREE_H
-
+#include "eb64tree.h"
 #include "ebtree.h"
-
+#include <stdint.h>
+#include <limits.h>
 
 /* Return the structure of type <type> whose member <member> points to <ptr> */
 #define eb64_entry(ptr, type, member) container_of(ptr, type, member)
-
-#define EB64_ROOT	EB_ROOT
-#define EB64_TREE_HEAD	EB_TREE_HEAD
-
-/* These types may sometimes already be defined */
-typedef unsigned long long u64;
-typedef   signed long long s64;
-
-/* This structure carries a node, a leaf, and a key. It must start with the
- * eb_node so that it can be cast into an eb_node. We could also have put some
- * sort of transparent union here to reduce the indirection level, but the fact
- * is, the end user is not meant to manipulate internals, so this is pointless.
- */
-struct eb64_node {
-	struct eb_node node; /* the tree node, must be at the beginning */
-	u64 key;
-};
 
 /*
  * Exported functions and macros.
@@ -51,49 +22,37 @@ struct eb64_node {
  */
 
 /* Return leftmost node in the tree, or NULL if none */
-static inline struct eb64_node *eb64_first(struct eb_root *root)
+inline struct eb64_node *eb64_first(struct eb_root *root)
 {
 	return eb64_entry(eb_first(root), struct eb64_node, node);
 }
 
 /* Return rightmost node in the tree, or NULL if none */
-static inline struct eb64_node *eb64_last(struct eb_root *root)
+inline struct eb64_node *eb64_last(struct eb_root *root)
 {
 	return eb64_entry(eb_last(root), struct eb64_node, node);
 }
 
 /* Return next node in the tree, or NULL if none */
-static inline struct eb64_node *eb64_next(struct eb64_node *eb64)
+inline struct eb64_node *eb64_next(struct eb64_node *eb64)
 {
 	return eb64_entry(eb_next(&eb64->node), struct eb64_node, node);
 }
 
 /* Return previous node in the tree, or NULL if none */
-static inline struct eb64_node *eb64_prev(struct eb64_node *eb64)
+inline struct eb64_node *eb64_prev(struct eb64_node *eb64)
 {
 	return eb64_entry(eb_prev(&eb64->node), struct eb64_node, node);
 }
 
-/* Return next leaf node within a duplicate sub-tree, or NULL if none. */
-static inline struct eb64_node *eb64_next_dup(struct eb64_node *eb64)
-{
-	return eb64_entry(eb_next_dup(&eb64->node), struct eb64_node, node);
-}
-
-/* Return previous leaf node within a duplicate sub-tree, or NULL if none. */
-static inline struct eb64_node *eb64_prev_dup(struct eb64_node *eb64)
-{
-	return eb64_entry(eb_prev_dup(&eb64->node), struct eb64_node, node);
-}
-
 /* Return next node in the tree, skipping duplicates, or NULL if none */
-static inline struct eb64_node *eb64_next_unique(struct eb64_node *eb64)
+inline struct eb64_node *eb64_next_unique(struct eb64_node *eb64)
 {
 	return eb64_entry(eb_next_unique(&eb64->node), struct eb64_node, node);
 }
 
 /* Return previous node in the tree, skipping duplicates, or NULL if none */
-static inline struct eb64_node *eb64_prev_unique(struct eb64_node *eb64)
+inline struct eb64_node *eb64_prev_unique(struct eb64_node *eb64)
 {
 	return eb64_entry(eb_prev_unique(&eb64->node), struct eb64_node, node);
 }
@@ -101,42 +60,21 @@ static inline struct eb64_node *eb64_prev_unique(struct eb64_node *eb64)
 /* Delete node from the tree if it was linked in. Mark the node unused. Note
  * that this function relies on a non-inlined generic function: eb_delete.
  */
-static inline void eb64_delete(struct eb64_node *eb64)
+inline void eb64_delete(struct eb64_node *eb64)
 {
 	eb_delete(&eb64->node);
-}
-
-/*
- * The following functions are not inlined by default. They are declared
- * in eb64tree.c, which simply relies on their inline version.
- */
-REGPRM2 struct eb64_node *eb64_lookup(struct eb_root *root, u64 x);
-REGPRM2 struct eb64_node *eb64i_lookup(struct eb_root *root, s64 x);
-REGPRM2 struct eb64_node *eb64_lookup_le(struct eb_root *root, u64 x);
-REGPRM2 struct eb64_node *eb64_lookup_ge(struct eb_root *root, u64 x);
-REGPRM2 struct eb64_node *eb64_insert(struct eb_root *root, struct eb64_node *new);
-REGPRM2 struct eb64_node *eb64i_insert(struct eb_root *root, struct eb64_node *new);
-
-/*
- * The following functions are less likely to be used directly, because their
- * code is larger. The non-inlined version is preferred.
- */
-
-/* Delete node from the tree if it was linked in. Mark the node unused. */
-static forceinline void __eb64_delete(struct eb64_node *eb64)
-{
-	__eb_delete(&eb64->node);
 }
 
 /*
  * Find the first occurence of a key in the tree <root>. If none can be
  * found, return NULL.
  */
-static forceinline struct eb64_node *__eb64_lookup(struct eb_root *root, u64 x)
+struct eb64_node *eb64_lookup(struct eb_root *root, uint64_t x)
 {
 	struct eb64_node *node;
 	eb_troot_t *troot;
-	u64 y;
+	uint64_t y;
+	int node_bit;
 
 	troot = root->b[EB_LEFT];
 	if (unlikely(troot == NULL))
@@ -153,6 +91,7 @@ static forceinline struct eb64_node *__eb64_lookup(struct eb_root *root, u64 x)
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb64_node, node.branches);
+		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {
@@ -181,12 +120,13 @@ static forceinline struct eb64_node *__eb64_lookup(struct eb_root *root, u64 x)
  * Find the first occurence of a signed key in the tree <root>. If none can
  * be found, return NULL.
  */
-static forceinline struct eb64_node *__eb64i_lookup(struct eb_root *root, s64 x)
+struct eb64_node *eb64i_lookup(struct eb_root *root, int64_t x)
 {
 	struct eb64_node *node;
 	eb_troot_t *troot;
-	u64 key = x ^ (1ULL << 63);
-	u64 y;
+	uint64_t key = x ^ (1ULL << 63);
+	uint64_t y;
+	int node_bit;
 
 	troot = root->b[EB_LEFT];
 	if (unlikely(troot == NULL))
@@ -196,13 +136,14 @@ static forceinline struct eb64_node *__eb64i_lookup(struct eb_root *root, s64 x)
 		if ((eb_gettag(troot) == EB_LEAF)) {
 			node = container_of(eb_untag(troot, EB_LEAF),
 					    struct eb64_node, node.branches);
-			if (node->key == (u64)x)
+			if (node->key == (uint64_t)x)
 				return node;
 			else
 				return NULL;
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb64_node, node.branches);
+		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {
@@ -231,13 +172,12 @@ static forceinline struct eb64_node *__eb64i_lookup(struct eb_root *root, s64 x)
  * Only new->key needs be set with the key. The eb64_node is returned.
  * If root->b[EB_RGHT]==1, the tree may only contain unique keys.
  */
-static forceinline struct eb64_node *
-__eb64_insert(struct eb_root *root, struct eb64_node *new) {
+struct eb64_node *eb64_insert(struct eb_root *root, struct eb64_node *new) {
 	struct eb64_node *old;
 	unsigned int side;
 	eb_troot_t *troot;
-	u64 newkey; /* caching the key saves approximately one cycle */
-	eb_troot_t *root_right;
+	uint64_t newkey; /* caching the key saves approximately one cycle */
+	eb_troot_t *root_right = root;
 	int old_node_bit;
 
 	side = EB_LEFT;
@@ -370,13 +310,13 @@ __eb64_insert(struct eb_root *root, struct eb64_node *new) {
 
 		/* walk down */
 		root = &old->node.branches;
-#if BITS_PER_LONG >= 64
+#if ULONG_MAX >= UINT64_T_MAX
 		side = (newkey >> old_node_bit) & EB_NODE_BRANCH_MASK;
 #else
 		side = newkey;
 		side >>= old_node_bit;
-		if (old_node_bit >= 32) {
-			side = newkey >> 32;
+		if (old_node_bit >= 0x20) {
+			side = newkey >> 0x20;
 			side >>= old_node_bit & 0x1F;
 		}
 		side &= EB_NODE_BRANCH_MASK;
@@ -407,13 +347,12 @@ __eb64_insert(struct eb_root *root, struct eb64_node *new) {
  * signed keys. Only new->key needs be set with the key. The eb64_node
  * is returned. If root->b[EB_RGHT]==1, the tree may only contain unique keys.
  */
-static forceinline struct eb64_node *
-__eb64i_insert(struct eb_root *root, struct eb64_node *new) {
+struct eb64_node *eb64i_insert(struct eb_root *root, struct eb64_node *new) {
 	struct eb64_node *old;
 	unsigned int side;
 	eb_troot_t *troot;
-	u64 newkey; /* caching the key saves approximately one cycle */
-	eb_troot_t *root_right;
+	uint64_t newkey; /* caching the key saves approximately one cycle */
+	eb_troot_t *root_right = root;
 	int old_node_bit;
 
 	side = EB_LEFT;
@@ -473,7 +412,7 @@ __eb64i_insert(struct eb_root *root, struct eb64_node *new) {
 			   The last two cases can easily be partially merged.
 			*/
 			 
-			if ((s64)new->key < (s64)old->key) {
+			if ((int64_t)new->key < (int64_t)old->key) {
 				new->node.leaf_p = new_left;
 				old->node.leaf_p = new_rght;
 				new->node.branches.b[EB_LEFT] = new_leaf;
@@ -526,13 +465,13 @@ __eb64i_insert(struct eb_root *root, struct eb64_node *new) {
 
 			new->node.node_p = old->node.node_p;
 
-			if ((s64)new->key < (s64)old->key) {
+			if ((int64_t)new->key < (int64_t)old->key) {
 				new->node.leaf_p = new_left;
 				old->node.node_p = new_rght;
 				new->node.branches.b[EB_LEFT] = new_leaf;
 				new->node.branches.b[EB_RGHT] = old_node;
 			}
-			else if ((s64)new->key > (s64)old->key) {
+			else if ((int64_t)new->key > (int64_t)old->key) {
 				old->node.node_p = new_left;
 				new->node.leaf_p = new_rght;
 				new->node.branches.b[EB_LEFT] = old_node;
@@ -548,13 +487,13 @@ __eb64i_insert(struct eb_root *root, struct eb64_node *new) {
 
 		/* walk down */
 		root = &old->node.branches;
-#if BITS_PER_LONG >= 64
+#if ULONG_MAX >= UINT64_T_MAX
 		side = (newkey >> old_node_bit) & EB_NODE_BRANCH_MASK;
 #else
 		side = newkey;
 		side >>= old_node_bit;
-		if (old_node_bit >= 32) {
-			side = newkey >> 32;
+		if (old_node_bit >= 0x20) {
+			side = newkey >> 0x20;
 			side >>= old_node_bit & 0x1F;
 		}
 		side &= EB_NODE_BRANCH_MASK;
@@ -581,4 +520,177 @@ __eb64i_insert(struct eb_root *root, struct eb64_node *new) {
 	return new;
 }
 
-#endif /* _EB64_TREE_H */
+/*
+ * Find the last occurrence of the highest key in the tree <root>, which is
+ * equal to or less than <x>. NULL is returned is no key matches.
+ */
+struct eb64_node *eb64_lookup_le(struct eb_root *root, uint64_t x)
+{
+	struct eb64_node *node;
+	eb_troot_t *troot;
+
+	troot = root->b[EB_LEFT];
+	if (unlikely(troot == NULL))
+		return NULL;
+
+	while (1) {
+		if ((eb_gettag(troot) == EB_LEAF)) {
+			/* We reached a leaf, which means that the whole upper
+			 * parts were common. We will return either the current
+			 * node or its next one if the former is too small.
+			 */
+			node = container_of(eb_untag(troot, EB_LEAF),
+					    struct eb64_node, node.branches);
+			if (node->key <= x)
+				return node;
+			/* return prev */
+			troot = node->node.leaf_p;
+			break;
+		}
+		node = container_of(eb_untag(troot, EB_NODE),
+				    struct eb64_node, node.branches);
+
+		if (node->node.bit < 0) {
+			/* We're at the top of a dup tree. Either we got a
+			 * matching value and we return the rightmost node, or
+			 * we don't and we skip the whole subtree to return the
+			 * prev node before the subtree. Note that since we're
+			 * at the top of the dup tree, we can simply return the
+			 * prev node without first trying to escape from the
+			 * tree.
+			 */
+			if (node->key <= x) {
+				troot = node->node.branches.b[EB_RGHT];
+				while (eb_gettag(troot) != EB_LEAF)
+					troot = (eb_untag(troot, EB_NODE))->b[EB_RGHT];
+				return container_of(eb_untag(troot, EB_LEAF),
+						    struct eb64_node, node.branches);
+			}
+			/* return prev */
+			troot = node->node.node_p;
+			break;
+		}
+
+		if (((x ^ node->key) >> node->node.bit) >= EB_NODE_BRANCHES) {
+			/* No more common bits at all. Either this node is too
+			 * small and we need to get its highest value, or it is
+			 * too large, and we need to get the prev value.
+			 */
+			if ((node->key >> node->node.bit) < (x >> node->node.bit)) {
+				troot = node->node.branches.b[EB_RGHT];
+				return eb64_entry(eb_walk_down(troot, EB_RGHT), struct eb64_node, node);
+			}
+
+			/* Further values will be too high here, so return the prev
+			 * unique node (if it exists).
+			 */
+			troot = node->node.node_p;
+			break;
+		}
+		troot = node->node.branches.b[(x >> node->node.bit) & EB_NODE_BRANCH_MASK];
+	}
+
+	/* If we get here, it means we want to report previous node before the
+	 * current one which is not above. <troot> is already initialised to
+	 * the parent's branches.
+	 */
+	while (eb_gettag(troot) == EB_LEFT) {
+		/* Walking up from left branch. We must ensure that we never
+		 * walk beyond root.
+		 */
+		if (unlikely(eb_clrtag((eb_untag(troot, EB_LEFT))->b[EB_RGHT]) == NULL))
+			return NULL;
+		troot = (eb_root_to_node(eb_untag(troot, EB_LEFT)))->node_p;
+	}
+	/* Note that <troot> cannot be NULL at this stage */
+	troot = (eb_untag(troot, EB_RGHT))->b[EB_LEFT];
+	node = eb64_entry(eb_walk_down(troot, EB_RGHT), struct eb64_node, node);
+	return node;
+}
+
+/*
+ * Find the first occurrence of the lowest key in the tree <root>, which is
+ * equal to or greater than <x>. NULL is returned is no key matches.
+ */
+struct eb64_node *eb64_lookup_ge(struct eb_root *root, uint64_t x)
+{
+	struct eb64_node *node;
+	eb_troot_t *troot;
+
+	troot = root->b[EB_LEFT];
+	if (unlikely(troot == NULL))
+		return NULL;
+
+	while (1) {
+		if ((eb_gettag(troot) == EB_LEAF)) {
+			/* We reached a leaf, which means that the whole upper
+			 * parts were common. We will return either the current
+			 * node or its next one if the former is too small.
+			 */
+			node = container_of(eb_untag(troot, EB_LEAF),
+					    struct eb64_node, node.branches);
+			if (node->key >= x)
+				return node;
+			/* return next */
+			troot = node->node.leaf_p;
+			break;
+		}
+		node = container_of(eb_untag(troot, EB_NODE),
+				    struct eb64_node, node.branches);
+
+		if (node->node.bit < 0) {
+			/* We're at the top of a dup tree. Either we got a
+			 * matching value and we return the leftmost node, or
+			 * we don't and we skip the whole subtree to return the
+			 * next node after the subtree. Note that since we're
+			 * at the top of the dup tree, we can simply return the
+			 * next node without first trying to escape from the
+			 * tree.
+			 */
+			if (node->key >= x) {
+				troot = node->node.branches.b[EB_LEFT];
+				while (eb_gettag(troot) != EB_LEAF)
+					troot = (eb_untag(troot, EB_NODE))->b[EB_LEFT];
+				return container_of(eb_untag(troot, EB_LEAF),
+						    struct eb64_node, node.branches);
+			}
+			/* return next */
+			troot = node->node.node_p;
+			break;
+		}
+
+		if (((x ^ node->key) >> node->node.bit) >= EB_NODE_BRANCHES) {
+			/* No more common bits at all. Either this node is too
+			 * large and we need to get its lowest value, or it is too
+			 * small, and we need to get the next value.
+			 */
+			if ((node->key >> node->node.bit) > (x >> node->node.bit)) {
+				troot = node->node.branches.b[EB_LEFT];
+				return eb64_entry(eb_walk_down(troot, EB_LEFT), struct eb64_node, node);
+			}
+
+			/* Further values will be too low here, so return the next
+			 * unique node (if it exists).
+			 */
+			troot = node->node.node_p;
+			break;
+		}
+		troot = node->node.branches.b[(x >> node->node.bit) & EB_NODE_BRANCH_MASK];
+	}
+
+	/* If we get here, it means we want to report next node after the
+	 * current one which is not below. <troot> is already initialised
+	 * to the parent's branches.
+	 */
+	while (eb_gettag(troot) != EB_LEFT)
+		/* Walking up from right branch, so we cannot be below root */
+		troot = (eb_root_to_node(eb_untag(troot, EB_RGHT)))->node_p;
+
+	/* Note that <troot> cannot be NULL at this stage */
+	troot = (eb_untag(troot, EB_LEFT))->b[EB_RGHT];
+	if (eb_clrtag(troot) == NULL)
+		return NULL;
+
+	node = eb64_entry(eb_walk_down(troot, EB_LEFT), struct eb64_node, node);
+	return node;
+}

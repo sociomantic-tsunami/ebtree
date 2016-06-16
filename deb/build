@@ -1,0 +1,88 @@
+#!/bin/sh
+# Debian package building script
+#
+# Copyright (C) 2009-2016 Sociomantic Labs GmbH.
+# Distributed under MIT/X11 license (See accompanying file LICENSE)
+
+set -e
+
+cd `dirname $0`
+
+genchangelog()
+{
+	echo "$1 ($2) `lsb_release -sc`; urgency=low"
+	echo
+	git log --since="1 year ago" --date=short --format="  * %s (%h, %cd)" |
+		fold --spaces --width 76 | sed 's/^\([^ ]\+\)/    \1/'
+	echo
+	echo " -- $3  `LANG=C date -R`"
+}
+
+pkgversion=$(git describe --dirty | cut -c2- |
+		sed 's/-\([0-9]\+\)-\(g[0-9a-f]\+\)/+\1~\2/' |
+		sed 's/\(~g[0-9a-f]\+\)-dirty$/-dirty\1/' |
+		sed 's/-dirty/~dirty.'`date +%Y%m%d%H%M%S`'/'
+	)-$(lsb_release -cs)
+
+libversion=$(echo $pkgversion | cut -c1)
+
+pkgmaint=$(echo "`git config user.name` <`git config user.email`>")
+
+changelog=`mktemp`
+trap "rm -f '$changelog'; exit 1" INT TERM QUIT
+
+
+pkgname=libebtree$libversion
+genchangelog "$pkgname" "$pkgversion" "$pkgmaint" > "$changelog"
+cp ../libebtree.so libebtree.so.$pkgversion
+chmod a-x libebtree.so.$pkgversion
+strip libebtree.so.$pkgversion
+ln -sf libebtree.so.$pkgversion libebtree.so.$libversion
+fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
+	--maintainer "$pkgmaint" \
+	--description "Elastic Binary Tree library" \
+	--url 'https://github.com/sociomantic-tsunami/ebtree' \
+	--vendor 'Sociomantic Labs GmbH' \
+	--license MIT \
+	--category libs \
+	--deb-changelog "$changelog" \
+	./libebtree.so.$pkgversion=/usr/lib/libebtree.so.$pkgversion \
+	./libebtree.so.$libversion=/usr/lib/libebtree.so.$libversion
+
+
+pkgname=libebtree$libversion-dbg
+genchangelog "$pkgname" "$pkgversion" "$pkgmaint" > "$changelog"
+build_id=`readelf -n ../libebtree.so |
+		sed -n 's/^.*Build ID: \([a-f0-9]\{40\}\).*$/\1/p'`
+debug_file=`printf $build_id | cut -b1-2`/`printf $build_id | cut -b3-`.debug
+objcopy --only-keep-debug ../libebtree.so libebtree.so.debug
+fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
+	--maintainer "$pkgmaint" \
+	--description "Elastic Binary Tree library" \
+	--url 'https://github.com/sociomantic-tsunami/ebtree' \
+	--vendor 'Sociomantic Labs GmbH' \
+	--license MIT \
+	--category libs \
+	--depends "libebtree$libversion (=$pkgversion)" \
+	--deb-changelog "$changelog" \
+	./libebtree.so.debug=/usr/lib/debug/.build-id/$debug_file
+
+
+pkgname=libebtree$libversion-dev
+genchangelog "$pkgname" "$pkgversion" "$pkgmaint" > "$changelog"
+mkdir -p ebtree
+cp ../src/*.h ebtree/
+ln -sf libebtree.so.$libversion libebtree.so
+fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
+	--maintainer "$pkgmaint" \
+	--description "Elastic Binary Tree library (development files)" \
+	--url 'https://github.com/sociomantic-tsunami/ebtree' \
+	--vendor 'Sociomantic Labs GmbH' \
+	--license MIT \
+	--category libdevel \
+	--depends "libebtree$libversion (=$pkgversion)" \
+	--deb-changelog "$changelog" \
+	../libebtree.a=/usr/lib/libebtree.a \
+	./libebtree.so=/usr/lib/libebtree.so \
+	./ebtree=/usr/include
+

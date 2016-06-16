@@ -1,21 +1,10 @@
 /*
  * Elastic Binary Trees - macros to manipulate String data nodes.
- * Version 6.0.6
- * (C) 2002-2011 - Willy Tarreau <w@1wt.eu>
+ * Version 6.0
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation, version 2.1
- * exclusively.
+ * Copyright (C) 2000-2015 Willy Tarreau <w@1wt.eu>
+ * Distributed under MIT/X11 license (See accompanying file LICENSE)
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 /* These functions and macros rely on Multi-Byte nodes */
@@ -23,22 +12,16 @@
 #ifndef _EBSTTREE_H
 #define _EBSTTREE_H
 
+#include "ebsttree.h"
 #include "ebtree.h"
 #include "ebmbtree.h"
-
-/* The following functions are not inlined by default. They are declared
- * in ebsttree.c, which simply relies on their inline version.
- */
-REGPRM2 struct ebmb_node *ebst_lookup(struct eb_root *root, const char *x);
-REGPRM2 struct ebmb_node *ebst_insert(struct eb_root *root, struct ebmb_node *new);
 
 /* Find the first occurence of a length <len> string <x> in the tree <root>.
  * It's the caller's reponsibility to use this function only on trees which
  * only contain zero-terminated strings, and that no null character is present
  * in string <x> in the first <len> chars. If none can be found, return NULL.
  */
-static forceinline struct ebmb_node *
-ebst_lookup_len(struct eb_root *root, const char *x, unsigned int len)
+struct ebmb_node *ebst_lookup_len(struct eb_root *root, const char *x, unsigned int len)
 {
 	struct ebmb_node *node;
 
@@ -52,7 +35,7 @@ ebst_lookup_len(struct eb_root *root, const char *x, unsigned int len)
  * It's the caller's reponsibility to use this function only on trees which
  * only contain zero-terminated strings. If none can be found, return NULL.
  */
-static forceinline struct ebmb_node *__ebst_lookup(struct eb_root *root, const void *x)
+struct ebmb_node *ebst_lookup(struct eb_root *root, const void *x)
 {
 	struct ebmb_node *node;
 	eb_troot_t *troot;
@@ -110,14 +93,6 @@ static forceinline struct ebmb_node *__ebst_lookup(struct eb_root *root, const v
 				if (eb_gettag(root->b[EB_RGHT]))
 					return node;
 			}
-			/* if the bit is larger than the node's, we must bound it
-			 * because we might have compared too many bytes with an
-			 * inappropriate leaf. For a test, build a tree from "0",
-			 * "WW", "W", "S" inserted in this exact sequence and lookup
-			 * "W" => "S" is returned without this assignment.
-			 */
-			else
-				bit = node_bit;
 		}
 
 		troot = node->node.branches.b[(((unsigned char*)x)[node_bit >> 3] >>
@@ -130,13 +105,12 @@ static forceinline struct ebmb_node *__ebst_lookup(struct eb_root *root, const v
  * returned. If root->b[EB_RGHT]==1, the tree may only contain unique keys. The
  * caller is responsible for properly terminating the key with a zero.
  */
-static forceinline struct ebmb_node *
-__ebst_insert(struct eb_root *root, struct ebmb_node *new)
+struct ebmb_node *ebst_insert(struct eb_root *root, struct ebmb_node *new)
 {
 	struct ebmb_node *old;
 	unsigned int side;
 	eb_troot_t *troot;
-	eb_troot_t *root_right;
+	eb_troot_t *root_right = root;
 	int diff;
 	int bit;
 	int old_node_bit;
