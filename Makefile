@@ -1,34 +1,41 @@
-OBJS = ebtree.o eb32tree.o eb64tree.o ebmbtree.o ebsttree.o ebimtree.o ebistree.o
-CFLAGS = -O3
-EXAMPLES = $(basename $(wildcard examples/*.c))
+# Makefile for ebtree
+#
+# Copyright (C) 2000-2016 Willy Tarreau <w@1wt.eu>
+# Copyright (C) 2009-2016 Sociomantic Labs GmbH.
+# Distributed under MIT/X11 license (See accompanying file LICENSE)
 
-all: libebtree.a
+o ?= obj
 
-examples: ${EXAMPLES}
+DEBUG ?= 1
 
-libebtree.a: $(OBJS)
+CFLAGS := -O3 -Wall -std=c99 $(if $(DEBUG),-g)
+
+VERSION := 6
+OBJS := ebtree.o eb32tree.o eb64tree.o eb128tree.o ebmbtree.o ebsttree.o ebimtree.o ebistree.o
+
+$(shell mkdir -p $o)
+
+.PHONY: all
+all: libebtree.a libebtree.so
+
+libebtree.a: $(addprefix $o/static-,$(OBJS))
 	$(AR) rv $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) -o $@ -c $^
+libebtree.so: CFLAGS += -fPIC
+libebtree.so: $(addprefix $o/dynamic-,$(OBJS))
+	$(LINK.c) $^ $(LOADLIBES) $(LDLIBS) $(OUTPUT_OPTION) -shared -Wl,-soname,$@.$(VERSION)
 
-examples/%: examples/%.c libebtree.a
-	$(CC) $(CFLAGS) -I. -DSTANDALONE -o $@ $< -L. -lebtree
+$o/static-%.o: src/%.c
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
-test: test32 test64 testst
+$o/dynamic-%.o: src/%.c
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
-test%: test%.c libebtree.a
-	$(CC) $(CFLAGS) -o $@ $< -L. -lebtree
+.PHONY: deb
+deb: all
+	deb/build
 
+.PHONY: clean
 clean:
-	-rm -fv libebtree.a $(OBJS) *~ *.rej core test32 test64 testst ${EXAMPLES}
+	$(RM) -r libebtree.a libebtree.so $o deb/libebtree* deb/ebtree/
 
-ifeq ($(wildcard .git),.git)
-VERSION := $(shell [ -d .git/. ] && ref=`(git describe --tags --match 'v*') 2>/dev/null` && ref=$${ref%-g*} && echo "$${ref\#v}")
-SUBVERS := $(shell comms=`git log --no-merges v$(VERSION).. 2>/dev/null |grep -c ^commit `; [ $$comms -gt 0 ] && echo "-$$comms" )
-endif
-
-git-tar: .git
-	git archive --format=tar --prefix="ebtree-$(VERSION)/" HEAD | gzip -9 > ebtree-$(VERSION)$(SUBVERS).tar.gz
-
-.PHONY: examples tests
