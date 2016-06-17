@@ -47,8 +47,12 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--category libs \
 	--deb-changelog "$changelog" \
 	./libebtree.so.$pkgversion=/usr/lib/libebtree.so.$pkgversion \
-	./libebtree.so.$libversion=/usr/lib/libebtree.so.$libversion
-
+	./libebtree.so.$libversion=/usr/lib/
+# XXX: Originally it was ./libebtree.so.$libversion=/usr/lib/libebtree.so.$libversion
+#      It had to be changed to ./libebtree.so.$libversion=/usr/lib/ to
+#      workaround a fpm bug that makes symlink create a directory instead, so
+#      /usr/lib/libebtree.so.$libversion was a directory containing a symlink
+#      libebtree.so.$libversion in it
 
 pkgname=libebtree$libversion-dbg
 genchangelog "$pkgname" "$pkgversion" "$pkgmaint" > "$changelog"
