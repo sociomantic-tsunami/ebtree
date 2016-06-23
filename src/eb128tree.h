@@ -77,7 +77,7 @@ extern struct eb128_node *eb128_next_unique(struct eb128_node *eb128);
 extern struct eb128_node *eb128_prev_unique(struct eb128_node *eb128);
 
 /* Delete node from the tree if it was linked in. Mark the node unused. Note
-/*
+ *
  * The following functions are less likely to be used directly, because their
  * code is larger. The non-inlined version is preferred.
  */
