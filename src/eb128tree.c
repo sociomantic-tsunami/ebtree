@@ -794,7 +794,7 @@ struct eb128_node *eb128_insert(struct eb_root *root, struct eb128_node *new) {
 		side >>= old_node_bit;
 		if (old_node_bit >= 0x40) {
 			side = newkey >> 0x40;
-			side >>= old_node_bit & 0x3FF;
+			side >>= old_node_bit & 0x3F;
 		}
 		side &= EB_NODE_BRANCH_MASK;
 #else
@@ -970,7 +970,7 @@ struct eb128_node *eb128i_insert(struct eb_root *root, struct eb128_node *new) {
 		side >>= old_node_bit;
 		if (old_node_bit >= 0x40) {
 			side = newkey >> 0x40;
-			side >>= old_node_bit & 0x3FF;
+			side >>= old_node_bit & 0x3F;
 		}
 		side &= EB_NODE_BRANCH_MASK;
 #else
