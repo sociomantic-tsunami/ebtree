@@ -180,7 +180,7 @@ int eb128_cmp_264(
 	const uint128_t a = eb128_compose_264(alo, ahi),
 	                b = eb128_compose_264(blo, bhi);
 
-	return (a >= b)? a >= b : -1;
+	return (a >= b)? a > b : -1;
 }
 
 /******************************************************************************
