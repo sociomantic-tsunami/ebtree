@@ -555,7 +555,6 @@ struct eb128_node *eb128_lookup(struct eb_root *root, uint128_t x)
 	struct eb128_node *node;
 	eb_troot_t *troot = root->b[EB_LEFT];
 	uint128_t y;
-	int node_bit;
 
 
 	if (unlikely(troot == NULL))
@@ -572,7 +571,6 @@ struct eb128_node *eb128_lookup(struct eb_root *root, uint128_t x)
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb128_node, node.branches);
-		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {
@@ -607,7 +605,6 @@ struct eb128_node *eb128i_lookup(struct eb_root *root, int128_t x)
 	eb_troot_t *troot = root->b[EB_LEFT];
 	uint128_t key = x ^ (((int128_t) 1) << 0x7F);
 	uint128_t y;
-	int node_bit;
 
 	if (unlikely(troot == NULL))
 		return NULL;
@@ -623,7 +620,6 @@ struct eb128_node *eb128i_lookup(struct eb_root *root, int128_t x)
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb128_node, node.branches);
-		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {

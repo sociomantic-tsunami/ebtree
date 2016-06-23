@@ -74,7 +74,6 @@ struct eb64_node *eb64_lookup(struct eb_root *root, uint64_t x)
 	struct eb64_node *node;
 	eb_troot_t *troot;
 	uint64_t y;
-	int node_bit;
 
 	troot = root->b[EB_LEFT];
 	if (unlikely(troot == NULL))
@@ -91,7 +90,6 @@ struct eb64_node *eb64_lookup(struct eb_root *root, uint64_t x)
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb64_node, node.branches);
-		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {
@@ -126,7 +124,6 @@ struct eb64_node *eb64i_lookup(struct eb_root *root, int64_t x)
 	eb_troot_t *troot;
 	uint64_t key = x ^ (1ULL << 63);
 	uint64_t y;
-	int node_bit;
 
 	troot = root->b[EB_LEFT];
 	if (unlikely(troot == NULL))
@@ -143,7 +140,6 @@ struct eb64_node *eb64i_lookup(struct eb_root *root, int64_t x)
 		}
 		node = container_of(eb_untag(troot, EB_NODE),
 				    struct eb64_node, node.branches);
-		node_bit = node->node.bit;
 
 		y = node->key ^ x;
 		if (!y) {
