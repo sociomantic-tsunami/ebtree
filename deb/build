@@ -87,6 +87,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--depends "libebtree$libversion (=$pkgversion)" \
 	--deb-changelog "$changelog" \
 	../libebtree.a=/usr/lib/libebtree.a \
-	./libebtree.so=/usr/lib/ \ # Was =/usr/lib/libebtree.so, see XXX comment above
-	./ebtree=/usr/include
+	./ebtree=/usr/include \
+	./libebtree.so=/usr/lib/
+	# Was =/usr/lib/libebtree.so, see XXX comment above
 
