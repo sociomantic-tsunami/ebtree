@@ -1,0 +1,15 @@
+# Don't use any predefined language env
+# (see https://github.com/travis-ci/travis-ci/issues/4895#issuecomment-150703192)
+language: generic
+
+sudo: required
+
+services: docker
+
+env:
+    - DIST=trusty
+    - DIST=xenial
+
+install: ci/travis-install.sh
+
+script: ci/travis-script.sh
