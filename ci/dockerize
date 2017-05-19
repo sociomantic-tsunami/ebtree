@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+# Environment variables to export (Travis-defined + DOCKERIZE_VARS)
+env_vars="$(printenv -0 | sed -zn 's/^\([^=]\+\)=.*$/\1\n/p')"
+travis_vars="USER HOME LANG LC_ALL DEBIAN_FRONTEND \
+	RAILS_ENV RACK_ENV MERB_ENV JRUBY_OPTS JAVA_HOME \
+	CI CONTINUOUS_INTEGRATION $(echo "$env_vars" | grep '^TRAVIS')"
+exported_env_vars="$travis_vars $DOCKERIZE_VARS"
+docker_env_var_args=$(echo $exported_env_vars | sed -n 's/\([^ ]\+\)/-e \1/gp')
+
+# Run the actual command
+set -x
+docker run -ti --rm -v "$HOME:$HOME" -v "$PWD:$PWD" -w "$PWD" -u "$(id -u)" \
+	$docker_env_var_args ebtree:$DIST "$@"
