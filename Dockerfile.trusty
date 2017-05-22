@@ -1,3 +1,3 @@
-FROM sociomantictsunami/base:v1-trusty
+FROM sociomantictsunami/base:v2test-trusty
 COPY docker/ /docker-tmp
 RUN /docker-tmp/build && rm -fr /docker-tmp

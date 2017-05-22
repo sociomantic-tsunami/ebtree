@@ -7,9 +7,21 @@ sudo: required
 services: docker
 
 env:
-    - DIST=trusty
-    - DIST=xenial
+    global:
+        - DOCKERIZE_VARS="BINTRAY_USER BINTRAY_API_KEY PUBLISH OVERRIDE DIST"
+    matrix:
+        - DIST=trusty
+        - DIST=xenial
 
 install: ci/travis-install.sh
 
-script: ci/travis-script.sh
+script:
+    - ci/dockerize make -r all
+    - ci/dockerize make -r deb
+
+deploy:
+    provider: script
+    script: ci/dockerize ci/bintray-upload "$TRAVIS_TAG" sociomantic-tsunami/ebtree/ebtree deb/*.deb
+    skip_cleanup: true
+    on:
+        tags: true
