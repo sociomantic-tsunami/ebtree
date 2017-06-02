@@ -25,3 +25,10 @@ env:
 install: beaver install
 
 script: beaver make all deb
+
+deploy:
+    provider: script
+    script: beaver bintray upload -d sociomantic-tsunami/dlang/ebtree deb/*.deb
+    skip_cleanup: true
+    on:
+        tags: true
