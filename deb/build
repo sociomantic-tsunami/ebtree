@@ -18,11 +18,11 @@ genchangelog()
 	echo " -- $3  `LANG=C date -R`"
 }
 
-pkgversion=$(git describe --dirty | cut -c2- |
+pkgversion="1:$(git describe --dirty | cut -c2- |
 		sed 's/-\([0-9]\+\)-\(g[0-9a-f]\+\)/+\1~\2/' |
 		sed 's/\(~g[0-9a-f]\+\)-dirty$/-dirty\1/' |
 		sed 's/-dirty/~dirty.'`date +%Y%m%d%H%M%S`'/'
-	)-$(lsb_release -cs)
+	)-$(lsb_release -cs)"
 
 libversion=$(echo $pkgversion | cut -c1)
 
