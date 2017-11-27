@@ -18,7 +18,7 @@ genchangelog()
 	echo " -- $3  `LANG=C date -R`"
 }
 
-pkgversion="1:$(git describe --dirty | cut -c2- |
+pkgversion="$(git describe --dirty | cut -c2- |
 		sed 's/-\([0-9]\+\)-\(g[0-9a-f]\+\)/+\1~\2/' |
 		sed 's/\(~g[0-9a-f]\+\)-dirty$/-dirty\1/' |
 		sed 's/-dirty/~dirty.'`date +%Y%m%d%H%M%S`'/'
@@ -31,6 +31,7 @@ pkgmaint=$(echo "`git config user.name` <`git config user.email`>")
 changelog=`mktemp`
 trap "rm -f '$changelog'; exit 1" INT TERM QUIT
 
+epoch="1"
 
 pkgname=libebtree$libversion
 genchangelog "$pkgname" "$pkgversion" "$pkgmaint" > "$changelog"
@@ -46,6 +47,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--license MIT \
 	--category libs \
 	--deb-changelog "$changelog" \
+	--epoch "$epoch" \
 	./libebtree.so.$pkgversion=/usr/lib/libebtree.so.$pkgversion \
 	./libebtree.so.$libversion=/usr/lib/
 # XXX: Originally it was ./libebtree.so.$libversion=/usr/lib/libebtree.so.$libversion
@@ -67,6 +69,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--vendor 'Sociomantic Labs GmbH' \
 	--license MIT \
 	--category libs \
+	--epoch "$epoch" \
 	--depends "libebtree$libversion (=$pkgversion)" \
 	--deb-changelog "$changelog" \
 	./libebtree.so.debug=/usr/lib/debug/.build-id/$debug_file
@@ -86,6 +89,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--category libdevel \
 	--depends "libebtree$libversion (=$pkgversion)" \
 	--deb-changelog "$changelog" \
+	--epoch "$epoch" \
 	../libebtree.a=/usr/lib/libebtree.a \
 	./ebtree=/usr/include \
 	./libebtree.so=/usr/lib/
