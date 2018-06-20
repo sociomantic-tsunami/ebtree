@@ -87,7 +87,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--vendor 'Sociomantic Labs GmbH' \
 	--license MIT \
 	--category libdevel \
-	--depends "libebtree$libversion (=$pkgversion)" \
+	--depends "libebtree$libversion (=$epoch:$pkgversion)" \
 	--deb-changelog "$changelog" \
 	--epoch "$epoch" \
 	../libebtree.a=/usr/lib/libebtree.a \
