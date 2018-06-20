@@ -70,7 +70,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--license MIT \
 	--category libs \
 	--epoch "$epoch" \
-	--depends "libebtree$libversion (=$pkgversion)" \
+	--depends "libebtree$libversion (=$epoch:$pkgversion)" \
 	--deb-changelog "$changelog" \
 	./libebtree.so.debug=/usr/lib/debug/.build-id/$debug_file
 
