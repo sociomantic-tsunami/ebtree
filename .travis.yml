@@ -18,7 +18,9 @@ env:
     global:
         # Make sure beaver is in the PATH
         - PATH="$(git config -f .gitmodules submodule.beaver.path)/bin:$PATH"
+    matrix:
         - DIST=xenial
+        - DIST=bionic
 
 install: beaver install
 
