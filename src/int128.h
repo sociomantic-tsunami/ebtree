@@ -10,7 +10,7 @@
  * @see http://gcc.gnu.org/gcc-4.6/changes.html
  *
  * Copyright (C) 2000-2015 Willy Tarreau <w@1wt.eu>
- * Copyright (C) 2009-2016 Sociomantic Labs GmbH.
+ * Copyright (C) 2009-2016 dunnhumby Germany GmbH.
  * Distributed under MIT/X11 license (See accompanying file LICENSE)
  *
  */

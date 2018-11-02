@@ -1,7 +1,7 @@
 #!/bin/sh
 # Debian package building script
 #
-# Copyright (C) 2009-2016 Sociomantic Labs GmbH.
+# Copyright (C) 2009-2016 dunnhumby Germany GmbH.
 # Distributed under MIT/X11 license (See accompanying file LICENSE)
 
 set -e
