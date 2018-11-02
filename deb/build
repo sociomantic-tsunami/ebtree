@@ -43,7 +43,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--maintainer "$pkgmaint" \
 	--description "Elastic Binary Tree library" \
 	--url 'https://github.com/sociomantic-tsunami/ebtree' \
-	--vendor 'Sociomantic Labs GmbH' \
+	--vendor 'dunnhumby Germany GmbH' \
 	--license MIT \
 	--category libs \
 	--deb-changelog "$changelog" \
@@ -66,7 +66,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--maintainer "$pkgmaint" \
 	--description "Elastic Binary Tree library" \
 	--url 'https://github.com/sociomantic-tsunami/ebtree' \
-	--vendor 'Sociomantic Labs GmbH' \
+	--vendor 'dunnhumby Germany GmbH' \
 	--license MIT \
 	--category libs \
 	--epoch "$epoch" \
@@ -84,7 +84,7 @@ fpm -f -s dir -t deb -n "$pkgname" -v "$pkgversion" \
 	--maintainer "$pkgmaint" \
 	--description "Elastic Binary Tree library (development files)" \
 	--url 'https://github.com/sociomantic-tsunami/ebtree' \
-	--vendor 'Sociomantic Labs GmbH' \
+	--vendor 'dunnhumby Germany GmbH' \
 	--license MIT \
 	--category libdevel \
 	--depends "libebtree$libversion (=$epoch:$pkgversion)" \
