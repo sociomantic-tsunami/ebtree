@@ -17,9 +17,14 @@ $(shell mkdir -p $o)
 
 .PHONY: all
 all: libebtree.a libebtree.so
+osx: libebtree.a libebtree.dylib
 
 libebtree.a: $(addprefix $o/static-,$(OBJS))
 	$(AR) rv $@ $^
+
+libebtree.dylib: CFLAGS += -fPIC
+libebtree.dylib: $(addprefix $o/dynamic-,$(OBJS))
+	$(LINK.c) $^ $(LOADLIBES) $(LDLIBS) $(OUTPUT_OPTION) -shared -Wl,-install_name,$@.$(VERSION)
 
 libebtree.so: CFLAGS += -fPIC
 libebtree.so: $(addprefix $o/dynamic-,$(OBJS))
